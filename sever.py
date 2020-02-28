@@ -24,16 +24,14 @@ class sever_Handler(socketserver.BaseRequestHandler):
     def setup(self):
         super().setup()
         self.event = threading.Event()
-        sk: socket.socket = self.request
-        logging.info('setup:{}'.format(sk))
-        clients.append(sk)
+        logging.info('setup:{}'.format(self.request))
+        clients.append(self.request)
 
     def handle(self):
         super().handle()
-        sk:socket.socket = self.request
         while not self.event.is_set():
             try:
-                data = sk.recv(1024).decode()
+                data = self.request.recv(1024).decode()
             except Exception as e:
                 logging.info(e)
                 break
