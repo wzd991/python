@@ -275,7 +275,9 @@ class main_fun():
                     if idx == 9:
                         if self.connect_id == None:
                             # self.uart_send('AT+CIPOPEN=1,"TCP","222.249.238.19",52012\r')
-                            self.uart_send('AT+CIPOPEN=1,"TCP","222.249.238.19",52011\r')
+                            # self.uart_send('AT+CIPOPEN=1,"TCP","222.249.238.19",52011\r')
+                            # self.uart_send('AT+CIPOPEN=1,"TCP","120.27.92.45",52011\r')
+                            self.uart_send('AT+CIPOPEN=1,"TCP","172.31.130.135",52011\r')
                         else :
                             logging.info('server connect ok.')
                             self.send_to_server('123456')
