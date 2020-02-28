@@ -43,9 +43,8 @@ class sever_Handler(socketserver.BaseRequestHandler):
     def finish(self):
         super().finish()
         self.event.set()
-        sk: socket.socket = self.request
-        logging.info('del:{}'.format(sk))
-        clients.remove(sk)
+        logging.info('del:{}'.format(self.request))
+        clients.remove(self.request)
         self.request.close()
 
 
