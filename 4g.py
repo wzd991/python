@@ -18,6 +18,7 @@ import atexit
 import logging
 import logging.handlers
 import logging.config
+import  traceback
 CTRL_A = 1
 CTRL_B = 2
 CTRL_C = 3
@@ -119,7 +120,7 @@ class main_fun():
             sys.exit()
 
         self.uart_send("AT\r")
-        self.time_start(1,1,True,self.time_test1)
+        self.time_start(1, 1, True, self.time_test1)
         # self.time_start(2,100, True, self.time_test2)
         while True:
             try:
@@ -172,7 +173,7 @@ class main_fun():
             time.sleep(0.01)
             pass
         pass
-    def time_test1(self,time_id):
+    def time_test1(self, time_id):
         # logging.debug('time:{}'.format(time_id))
         self.time_cnt+=1
 
@@ -180,6 +181,7 @@ class main_fun():
         logging.debug('id:{} cnt:{}'.format(time_id, self.time_cnt))
         pass
     def uart_send(self, data):
+        # logging.debug(data)
         self.send_temp = data[:-1]
         self.uart_hd.write(data.encode())
         self.uart_hd.flush()
@@ -189,10 +191,11 @@ class main_fun():
         logging.debug('t:{} LINK:{} req:{} IND:{}'.format(self.time_cnt, self.server_connect_cnt, send_msg,self.at_msg_list))
         for temp in self.at_msg_list:
             (arg,cnt) = get_arg_list(temp)
+            print(arg)
             if cnt == 0:
                 return
 
-            # logging.debug('t:{} connect cnt:{} arg:{}'.format(self.time_cnt, self.server_connect_cnt, arg))
+            logging.debug('t:{} connect cnt:{} arg:{}'.format(self.time_cnt, self.server_connect_cnt, arg))
             if arg[0][:4] == '+IPD':
                 self.decode_mode = AT_DECODE_MODE_REC
                 self.rec_msg_cnt = int(arg[0][4:])
@@ -201,8 +204,16 @@ class main_fun():
                 return
 
             elif arg[0] == '+IPCLOSE:':
+                self.time_stop(3)
+
                 self.uart_send('AT\r')
                 self.connect_id = None
+                return
+            elif arg[0] == '+CIPEVENT:':
+                self.time_stop(3)
+                time.sleep(3)
+                logging.debug('stop')
+                self.uart_send('AT\r')
                 return
             elif arg[0] == '+CME':
                 if arg[1] == 'ERROR:':
@@ -210,7 +221,7 @@ class main_fun():
                     self.uart_send('AT+CFUN=0\r')
                 return
             elif arg[0] == '+CIPSEND:':
-                return
+                continue
 
             if send_msg[0] == 'AT+CFUN=0':
                 time.sleep(4)
@@ -256,16 +267,22 @@ class main_fun():
                 if arg[0] == '+CPSI:':
                     self.uart_send("AT+NETOPEN?\r")
             elif send_msg[0] == 'AT+NETOPEN?':
+                print(arg)
                 if arg[0] == '+NETOPEN:':
                     if arg[1] == '0':
                         self.uart_send("AT+NETOPEN\r")
                     elif arg[1] == '1':
-                        self.uart_send("AT+CIPOPEN?\r")
+                        self.uart_send("AT+IPADDR\r")
             elif send_msg[0] == 'AT+NETOPEN':
                 if cnt == 2:
                     if arg[1] == '0':
-                        self.uart_send("AT+CIPOPEN?\r")
+                        self.uart_send("AT+IPADDR\r")
+                    else:
+                        logging.debug('error')
+
                 pass
+            elif send_msg[0] == 'AT+IPADDR':
+                self.uart_send("AT+CIPOPEN?\r")
             elif send_msg[0] == 'AT+CIPOPEN?':
                 if arg[0] == '+CIPOPEN:':
                     idx = int(arg[1])
@@ -275,9 +292,7 @@ class main_fun():
                     if idx == 9:
                         if self.connect_id == None:
                             # self.uart_send('AT+CIPOPEN=1,"TCP","222.249.238.19",52012\r')
-                            # self.uart_send('AT+CIPOPEN=1,"TCP","222.249.238.19",52011\r')
-                            # self.uart_send('AT+CIPOPEN=1,"TCP","120.27.92.45",52011\r')
-                            self.uart_send('AT+CIPOPEN=1,"TCP","172.31.130.135",52011\r')
+                            self.uart_send('AT+CIPOPEN=1,"TCP","222.249.238.19",52011\r')
                         else :
                             logging.info('server connect ok.')
                             self.send_to_server('123456')
@@ -287,16 +302,23 @@ class main_fun():
 
             elif send_msg[0] == 'AT+CIPOPEN=1':
                 if arg[0] == '+CIPOPEN:':
-                    logging.info('hd:{} st:{}'.format(arg[1], arg[2]))
-                    if arg[2] == '0':
-                        self.server_connect_cnt+=1
-                        logging.info('server connect ok.')
-                        self.send_to_server('12345')
-                        self.time_start(3, 100, True, self.heart_fn)
-                    else:
+                    print(arg)
+                    if arg[1] == '0':
                         logging.debug('fail')
                         time.sleep(1)
                         self.uart_send('AT\r')
+                    else:
+                        logging.info('hd:{} st:{}'.format(arg[1], arg[2]))
+                        if arg[2] == '0':
+                            self.server_connect_cnt+=1
+                            logging.info('server connect ok.')
+                            self.send_to_server('12345')
+                            self.time_start(3, 100, True, self.heart_fn)
+                        else:
+                            logging.debug('fail')
+                            time.sleep(1)
+                            self.uart_send('AT\r')
+
 
     def heart_fn(self,time_id):
         msg = 'time:{}'.format(self.time_cnt*100)
@@ -308,11 +330,17 @@ class main_fun():
                 if temp == 0x0d or temp == 0x0a:
                     if len(self.at_chche):
                         msg = self.at_chche.decode()
+                        logging.info('rec:{}'.format(msg))
                         self.at_msg_list.append(msg)
                         (send_msg, send_msg_cnt) = get_arg_list(self.send_temp)
-                        if msg == 'OK' or msg == 'ERROR' or send_msg[0] == 'AT+NETOPEN' or \
-                                (len(send_msg[0]) > 8 and send_msg[0][:8] == '+CIPOPEN'):
-                            self.at_msg_fn()
+                        (msg_list, msg_cnt) = get_arg_list(msg)
+                        if msg_list[0] == 'OK' or msg_list[0] == 'ERROR' or  msg_list[0] =='+CIPEVENT:' or\
+                                msg_list[0] == '+IPCLOSE:'  or send_msg[0] == "AT+NETOPEN" or send_msg[0] == 'AT+CIPOPEN=1':
+                            try:
+                                self.at_msg_fn()
+                            except:
+                                traceback.print_exc()
+                                traceback.print_exception()
                             self.at_msg_list = []
                         self.at_chche = bytearray()
                 else:
@@ -338,3 +366,13 @@ if __name__ == '__main__':
     exit_event = threading.Event()
     print(choose_prot)
     fun = main_fun(choose_prot)
+
+
+
+'''
+
+at协议通信流程:
+msg -> 
+
+
+'''
